@@ -394,6 +394,6 @@ dict = {
     "seed": args.seed,
 }
 
-with open("./metric_deep_ensemble.csv", "a") as csv_file:
+with open("./store_experiments.csv", "a") as csv_file:
     dict_object = csv.DictWriter(csv_file, fieldnames=field_names)
     dict_object.writerow(dict)
