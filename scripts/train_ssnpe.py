@@ -55,33 +55,51 @@ print("prior:", args.prior)
 print("npe:", args.npe)
 
 
-PATH = "{}_{}_{}_{}_{}_{}_{}_{}{}_{}".format(
-    args.npe,
-    args.prior,
-    args.total_steps,
-    args.score_weight,
-    args.exp_id[4:],
+######## ARAMS ########
+print("######## PARAMS ########")
+total_steps = args.total_steps
+batch_size = 256
+tmp = list(range(0, 101_000, 5000))
+tmp[0] = 1000
+nb_simulations_allow = tmp[int(args.exp_id[4:])]
+score_weight = args.score_weight
+
+if args.activ_fun == 0:
+    activ_fun_string = "silu"
+elif args.activ_fun == 1:
+    activ_fun_string = "sin"
+
+if args.lr_schedule == 0:
+    lr_schedule_string = "p_c_s"
+elif args.lr_schedule == 1:
+    lr_schedule_string = "exp_decay"
+
+if args.npe:
+    sbi_method = "npe"
+else:
+    sbi_method = "nle"
+
+if args.prior:
+    proposal = "prior"
+else:
+    proposal = "ps"
+
+
+PATH = "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
+    sbi_method,
+    proposal,
+    total_steps,
+    score_weight,
+    nb_simulations_allow,
     args.seed,
     args.n_flow_layers,
     args.n_bijector_layers,
-    args.activ_fun,
+    activ_fun_string,
     args.lr_schedule,
 )
 
 os.makedirs(f"./exp{PATH}/save_params")
 os.makedirs(f"./exp{PATH}/fig")
-
-print("lr schedule ", args.lr_schedule)
-
-######## TRAINING PARAMS ########
-print("######## TRAINING PARAMS ########")
-total_steps = args.total_steps
-batch_size = 256
-tmp = list(range(0, 101_000, 5000))
-tmp[0] = 1000
-tmp.remove(10_000)
-nb_simulations_allow = tmp[int(args.exp_id[4:])]
-score_weight = args.score_weight
 
 
 ######## CONFIG LSST Y 10 ########
@@ -109,16 +127,16 @@ sample_ff = jnp.load("./data/posterior_full_field__256N_10ms_27gpa_0.26se.npy")
 # load sbi ref posterior
 if nb_simulations_allow != 100_000:
     PATH_REF = "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
-        args.npe,
-        args.prior,
-        args.total_steps,
+        sbi_method,
+        proposal,
+        total_steps,
+        score_weight,
+        nb_simulations_allow,
         float(0),
-        99,
+        100_000,
         0,
         args.n_flow_layers,
         args.n_bijector_layers,
-        args.activ_fun,
-        args.lr_schedule,
     )
     sample_ref_sbi = jnp.load(f"./exp{PATH_REF}/posteriors_sample.npy")
 
@@ -203,10 +221,8 @@ bijector_layers = [128] * args.n_bijector_layers
 
 if args.activ_fun == 0:
     activ_fun = jax.nn.silu
-    activ_fun_string = "silu"
 elif args.activ_fun == 1:
     activ_fun = jnp.sin
-    activ_fun_string = "sin"
 
 bijector_npe = partial(
     AffineSigmoidCoupling, layers=bijector_layers, activation=activ_fun, n_components=16
@@ -245,7 +261,7 @@ def log_prob_fn(params, theta, y):
 ######## LOSSES & UPDATE FUN ########
 print("######## LOSSES & UPDATE FUN ########")
 
-if args.npe:
+if args.npe and args.prior is False:
     probs = jnp.load("./probs_ps_likelihood.npy")
     prob_max = jnp.max(probs)
 
@@ -294,10 +310,8 @@ params = nvp_nd.init(
     jax.random.PRNGKey(args.seed), 0.5 * jnp.ones([1, dim]), 0.5 * jnp.ones([1, dim])
 )
 
-
 # optimizer
 if args.lr_schedule == 0:
-    print("lr schedure 0")
     lr_scheduler = optax.piecewise_constant_schedule(
         init_value=0.001,
         boundaries_and_scales={
@@ -307,17 +321,14 @@ if args.lr_schedule == 0:
             int(total_steps * 1): 0.5,
         },
     )
-    lr_schedule_string = "p_c_s"
 
 elif args.lr_schedule == 1:
-    print("lr schedure 1")
     lr_scheduler = optax.exponential_decay(
         init_value=0.001,
         transition_steps=total_steps // 50,
         decay_rate=0.9,
         end_value=1e-5,
     )
-    lr_schedule_string = "exp_decay"
 
 optimizer = optax.adam(lr_scheduler)
 opt_state = optimizer.init(params)
@@ -455,6 +466,8 @@ jnp.save(f"./exp{PATH}/posteriors_sample", sample_nd)
 
 field_names = [
     "experiment_id",
+    "sbi_method",
+    "proposal",
     "activ_fun",
     "lr_schedule",
     "total_steps",
@@ -468,6 +481,8 @@ field_names = [
 ]
 dict = {
     "experiment_id": f"exp{PATH}",
+    "sbi_method": sbi_method,
+    "proposal": proposal,
     "activ_fun": activ_fun_string,
     "lr_schedule": lr_schedule_string,
     "total_steps": args.total_steps,
