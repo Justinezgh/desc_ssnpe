@@ -31,6 +31,8 @@ for gpu in gpus:
 
 # script arguments
 parser = argparse.ArgumentParser()
+parser.add_argument("--path_to_access_sbi_lens", type=str, default=".")
+parser.add_argument("--path_to_access_ssnpe_desc_project", type=str, default=".")
 parser.add_argument("--total_steps", type=int, default=10_000)
 parser.add_argument("--score_weight", type=float, default=0)
 parser.add_argument("--exp_id", type=str, default=3)
@@ -123,7 +125,9 @@ params_name = config_lsst_y_10.params_name_latex
 print("######## LOAD OBSERVATION AND REFERENCES POSTERIOR ########")
 
 # load reference posterior
-sample_ff = jnp.load("./data/posterior_full_field__256N_10ms_27gpa_0.26se.npy")
+sample_ff = jnp.load(
+    f"{args.path_to_access_sbi_lens}/sbi_lens/sbi_lens/data/posterior_full_field__256N_10ms_27gpa_0.26se.npy"
+)
 # load sbi ref posterior
 if nb_simulations_allow != 100_000:
     PATH_REF = "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
@@ -141,7 +145,9 @@ if nb_simulations_allow != 100_000:
     sample_ref_sbi = jnp.load(f"./exp{PATH_REF}/posteriors_sample.npy")
 
 # plot observed mass map
-m_data = jnp.load("./data/m_data__256N_10ms_27gpa_0.26se.npy")
+m_data = jnp.load(
+    f"{args.path_to_access_sbi_lens}/sbi_lens/sbi_lens/data/m_data__256N_10ms_27gpa_0.26se.npy"
+)
 
 ######## DATASET ########
 print("######## DATASET ########")
@@ -149,25 +155,25 @@ print("######## DATASET ########")
 if args.npe:
     if args.prior:
         dataset = np.load(
-            "./LOADED&COMPRESSED_year_10_with_noise_score_density.npz",
+            f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/LOADED&COMPRESSED_year_10_with_noise_score_density.npz",
             allow_pickle=True,
         )["arr_0"]
 
     else:
         dataset = np.load(
-            "./LOADED&COMPRESSED_year_10_with_noise_score_density_proposal.npz",
+            f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/LOADED&COMPRESSED_year_10_with_noise_score_density_proposal.npz",
             allow_pickle=True,
         )["arr_0"]
 else:
     if args.prior:
         dataset = np.load(
-            "./LOADED&COMPRESSED_year_10_with_noise_score_conditional_proposal.npz",
+            f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/LOADED&COMPRESSED_year_10_with_noise_score_conditional_proposal.npz",
             allow_pickle=True,
         )["arr_0"]
 
     else:
         dataset = np.load(
-            "./LOADED&COMPRESSED_year_10_with_noise_score_conditional.npz",
+            f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/LOADED&COMPRESSED_year_10_with_noise_score_conditional.npz",
             allow_pickle=True,
         )["arr_0"]
 
@@ -177,10 +183,16 @@ print("######## COMPRESSOR ########")
 
 compressor = hk.transform_with_state(lambda y: ResNet18(dim)(y, is_training=False))
 
-a_file = open("./data/params_compressor/opt_state_resnet_vmim.pkl", "rb")
+a_file = open(
+    f"{args.path_to_access_sbi_lens}/sbi_lens/sbi_lens/data/params_compressor/opt_state_resnet_vmim.pkl",
+    "rb",
+)
 opt_state_resnet = pickle.load(a_file)
 
-a_file = open("./data/params_compressor/params_nd_compressor_vmim.pkl", "rb")
+a_file = open(
+    f"{args.path_to_access_sbi_lens}/sbi_lens/sbi_lens/data/params_compressor/params_nd_compressor_vmim.pkl",
+    "rb",
+)
 parameters_compressor = pickle.load(a_file)
 
 m_data_comressed, _ = compressor.apply(
@@ -262,7 +274,9 @@ def log_prob_fn(params, theta, y):
 print("######## LOSSES & UPDATE FUN ########")
 
 if args.npe and args.prior is False:
-    probs = jnp.load("./probs_ps_likelihood.npy")
+    probs = jnp.load(
+        f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/probs_ps_likelihood.npy"
+    )
     prob_max = jnp.max(probs)
 
 else:
