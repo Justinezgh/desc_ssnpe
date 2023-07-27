@@ -1,38 +1,27 @@
-import matplotlib.pyplot as plt
-from functools import partial
-from tqdm import tqdm
-import pickle
 import argparse
+import csv
 import os
-from chainconsumer import ChainConsumer
+import pickle
+from functools import partial
 
-import numpy as np
+import haiku as hk
 import jax
 import jax.numpy as jnp
-
+import matplotlib.pyplot as plt
+import numpy as np
 import numpyro.distributions as dist
-from numpyro.handlers import condition, trace, seed
-
-import jax_cosmo as jc
-
-from haiku._src.nets.resnet import ResNet18
 import optax
-import haiku as hk
-
-import tensorflow_datasets as tfds
 import tensorflow as tf
-
 import tensorflow_probability as tfp
+from chainconsumer import ChainConsumer
+from haiku._src.nets.resnet import ResNet18
+from sbi_lens.config import config_lsst_y_10
+from sbi_lens.normflow.models import AffineSigmoidCoupling, ConditionalRealNVP
+from tqdm import tqdm
 
 tfp = tfp.experimental.substrates.jax
 tfb = tfp.bijectors
 tfd = tfp.distributions
-
-from sbi_lens.simulator.LogNormal_field import lensingLogNormal
-from sbi_lens.config import config_lsst_y_10
-from sbi_lens.normflow.models import ConditionalRealNVP, AffineCoupling
-
-from sbi_lens.metrics.c2st import c2st
 
 gpus = tf.config.experimental.list_physical_devices(device_type="GPU")
 
@@ -50,7 +39,8 @@ parser.add_argument("--n_flow_layers", type=int, default=4)
 parser.add_argument("--n_bijector_layers", type=int, default=2)
 parser.add_argument("--activ_fun", type=int, default=0)
 parser.add_argument("--lr_schedule", type=int, default=1)
-
+parser.add_argument("--prior", type=bool, default=False)
+parser.add_argument("--npe", type=bool, default=True)
 args = parser.parse_args()
 
 print("total_steps:", args.total_steps)
@@ -61,8 +51,13 @@ print("n_flow_layers:", args.n_flow_layers)
 print("n_bijector_layers:", args.n_bijector_layers)
 print("activ_fun:", args.activ_fun)
 print("lr_schedule:", args.lr_schedule)
+print("prior:", args.prior)
+print("npe:", args.npe)
 
-PATH = "{}{}{}{}{}{}{}{}".format(
+
+PATH = "{}_{}_{}_{}_{}_{}_{}_{}{}_{}".format(
+    args.npe,
+    args.prior,
     args.total_steps,
     args.score_weight,
     args.exp_id[4:],
@@ -73,8 +68,8 @@ PATH = "{}{}{}{}{}{}{}{}".format(
     args.lr_schedule,
 )
 
-os.makedirs("./exp{}/save_params".format(PATH))
-os.makedirs("./exp{}/fig".format(PATH))
+os.makedirs(f"./exp{PATH}/save_params")
+os.makedirs(f"./exp{PATH}/fig")
 
 print("lr schedule ", args.lr_schedule)
 
@@ -113,7 +108,9 @@ print("######## LOAD OBSERVATION AND REFERENCES POSTERIOR ########")
 sample_ff = jnp.load("./data/posterior_full_field__256N_10ms_27gpa_0.26se.npy")
 # load sbi ref posterior
 if nb_simulations_allow != 100_000:
-    PATH_REF = "{}{}{}{}{}{}{}{}".format(
+    PATH_REF = "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
+        args.npe,
+        args.prior,
         args.total_steps,
         float(0),
         99,
@@ -123,7 +120,7 @@ if nb_simulations_allow != 100_000:
         args.activ_fun,
         args.lr_schedule,
     )
-    sample_ref_sbi = jnp.load("./exp{}/posteriors_sample.npy".format(PATH_REF))
+    sample_ref_sbi = jnp.load(f"./exp{PATH_REF}/posteriors_sample.npy")
 
 # plot observed mass map
 m_data = jnp.load("./data/m_data__256N_10ms_27gpa_0.26se.npy")
@@ -131,10 +128,31 @@ m_data = jnp.load("./data/m_data__256N_10ms_27gpa_0.26se.npy")
 ######## DATASET ########
 print("######## DATASET ########")
 
-dataset = np.load(
-    "./LOADED&COMPRESSED_year_10_with_noise_score_density_proposal.npz",
-    allow_pickle=True,
-)["arr_0"]
+if args.npe:
+    if args.prior:
+        dataset = np.load(
+            "./LOADED&COMPRESSED_year_10_with_noise_score_density.npz",
+            allow_pickle=True,
+        )["arr_0"]
+
+    else:
+        dataset = np.load(
+            "./LOADED&COMPRESSED_year_10_with_noise_score_density_proposal.npz",
+            allow_pickle=True,
+        )["arr_0"]
+else:
+    if args.prior:
+        dataset = np.load(
+            "./LOADED&COMPRESSED_year_10_with_noise_score_conditional_proposal.npz",
+            allow_pickle=True,
+        )["arr_0"]
+
+    else:
+        dataset = np.load(
+            "./LOADED&COMPRESSED_year_10_with_noise_score_conditional.npz",
+            allow_pickle=True,
+        )["arr_0"]
+
 
 ######## COMPRESSOR ########
 print("######## COMPRESSOR ########")
@@ -154,27 +172,32 @@ m_data_comressed, _ = compressor.apply(
 ######## CREATE NDE ########
 print("######## NDE ########")
 
-from sbi_lens.normflow.models import ConditionalRealNVP, AffineSigmoidCoupling
-import numpyro.distributions as dist
-
 key = jax.random.PRNGKey(0)
 
-omega_c = dist.TruncatedNormal(0.2664, 0.2, low=0).sample(key, (1000,))
-omega_b = dist.Normal(0.0492, 0.006).sample(key, (1000,))
-sigma_8 = dist.Normal(0.831, 0.14).sample(key, (1000,))
-h_0 = dist.Normal(0.6727, 0.063).sample(key, (1000,))
-n_s = dist.Normal(0.9645, 0.08).sample(key, (1000,))
-w_0 = dist.TruncatedNormal(-1.0, 0.9, low=-2.0, high=-0.3).sample(key, (1000,))
+if args.npe:
+    omega_c = dist.TruncatedNormal(0.2664, 0.2, low=0).sample(key, (1000,))
+    omega_b = dist.Normal(0.0492, 0.006).sample(key, (1000,))
+    sigma_8 = dist.Normal(0.831, 0.14).sample(key, (1000,))
+    h_0 = dist.Normal(0.6727, 0.063).sample(key, (1000,))
+    n_s = dist.Normal(0.9645, 0.08).sample(key, (1000,))
+    w_0 = dist.TruncatedNormal(-1.0, 0.9, low=-2.0, high=-0.3).sample(key, (1000,))
 
-theta = jnp.stack([omega_c, omega_b, sigma_8, h_0, n_s, w_0], axis=-1)
+    theta = jnp.stack([omega_c, omega_b, sigma_8, h_0, n_s, w_0], axis=-1)
 
-scale_theta = jnp.std(theta, axis=0) / 0.07
-shift_theta = jnp.mean(theta / scale_theta, axis=0) - 0.5
+    scale = jnp.std(theta, axis=0) / 0.07
+    shift = jnp.mean(theta / scale, axis=0) - 0.5
 
-normalized_p = tfb.Chain([tfb.Scale(scale_theta), tfb.Shift(shift_theta)]).inverse(
-    theta
-)
+else:
+    # how these qantities are comute (with dataset form prior)
+    # scale_y = jnp.std(dataset_y, axis=0) / 0.07
+    # shift_y = jnp.mean(dataset_y / scale_y, axis=0) - 0.5
 
+    scale = jnp.array(
+        [1.2179337, 1.9040986, 2.070386, 1.9527259, 1.0068599, 0.38351834]
+    )
+    shift = jnp.array(
+        [-0.51705444, -0.39985067, -0.53731424, -0.3843186, -0.5539374, -0.33893403]
+    )
 
 bijector_layers = [128] * args.n_bijector_layers
 
@@ -198,25 +221,38 @@ class SmoothNPE(hk.Module):
     def __call__(self, y):
         nvp = NF_npe(dim)(y)
         return tfd.TransformedDistribution(
-            nvp, tfb.Chain([tfb.Scale(scale_theta), tfb.Shift(shift_theta)])
+            nvp, tfb.Chain([tfb.Scale(scale), tfb.Shift(shift)])
         )
 
 
-nvp_nd = hk.without_apply_rng(
-    hk.transform(lambda theta, y: SmoothNPE()(y).log_prob(theta).squeeze())
-)
+if args.npe:
+    nvp_nd = hk.without_apply_rng(
+        hk.transform(lambda theta, y: SmoothNPE()(y).log_prob(theta).squeeze())
+    )
+    nvp_sample_nd = hk.transform(
+        lambda y: SmoothNPE()(y).sample(len(sample_ff), seed=hk.next_rng_key())
+    )
+else:
+    nvp_nd = hk.without_apply_rng(
+        hk.transform(lambda theta, y: SmoothNPE()(theta).log_prob(y).squeeze())
+    )
 
-log_prob_fn = lambda params, theta, y: nvp_nd.apply(params, theta, y)
 
-nvp_sample_nd = hk.transform(
-    lambda y: SmoothNPE()(y).sample(len(sample_ff), seed=hk.next_rng_key())
-)
+def log_prob_fn(params, theta, y):
+    return nvp_nd.apply(params, theta, y)
+
 
 ######## LOSSES & UPDATE FUN ########
 print("######## LOSSES & UPDATE FUN ########")
 
-probs = jnp.load("./probs_ps_likelihood.npy")
-prob_max = jnp.max(probs)
+if args.npe:
+    probs = jnp.load("./probs_ps_likelihood.npy")
+    prob_max = jnp.max(probs)
+
+else:
+    probs = 0
+    prob_max = 0
+
 
 ######## LOSSES & UPDATE FUN ########
 print("######## LOSSES & UPDATE FUN ########")
@@ -309,63 +345,113 @@ for batch in pbar:
         if jnp.isnan(l):
             break
 
-        if batch % 5000 == 0:
-            # save params
-            with open(
-                "./exp{}/save_params/params_ode_flow.pkl".format(PATH), "wb"
-            ) as fp:
-                pickle.dump(params, fp)
+# save params
+with open(f"./exp{PATH}/save_params/params_ode_flow.pkl", "wb") as fp:
+    pickle.dump(params, fp)
 
-            # save plot loss
-            plt.figure()
-            plt.plot(batch_loss[10:])
-            plt.title("Batch Loss")
-            plt.savefig("./exp{}/fig/loss".format(PATH))
+# save plot loss
+plt.figure()
+plt.plot(batch_loss[10:])
+plt.title("Batch Loss")
+plt.savefig(f"./exp{PATH}/fig/loss")
 
-            # save plot loss
-            plt.figure()
-            plt.plot(lr_scheduler_store)
-            plt.title("lr schedule")
-            plt.savefig("./exp{}/fig/lr_schedule".format(PATH))
+# save plot loss
+plt.figure()
+plt.plot(lr_scheduler_store)
+plt.title("lr schedule")
+plt.savefig(f"./exp{PATH}/fig/lr_schedule")
 
-            # save contour plot
-            sample_nd = nvp_sample_nd.apply(
-                params,
-                rng=jax.random.PRNGKey(43),
-                y=m_data_comressed * jnp.ones([len(sample_ff), dim]),
-            )
+if args.npe:
+    # save contour plot
+    sample_nd = nvp_sample_nd.apply(
+        params,
+        rng=jax.random.PRNGKey(43),
+        y=m_data_comressed * jnp.ones([len(sample_ff), dim]),
+    )
 
-            idx = jnp.where(jnp.isnan(sample_nd))[0]
-            sample_nd = jnp.delete(sample_nd, idx, axis=0)
+    idx = jnp.where(jnp.isnan(sample_nd))[0]
+    sample_nd = jnp.delete(sample_nd, idx, axis=0)
 
-            plt.figure()
-            c = ChainConsumer()
-            c.add_chain(
-                sample_ff,
-                parameters=params_name,
-                name="Full Field HMC",
-                shade_alpha=0.5,
-            )
-            c.add_chain(
-                sample_nd,
-                parameters=params_name,
-                name="Full Field SBI",
-                shade_alpha=0.5,
-            )
-            fig = c.plotter.plot(
-                figsize=1.2,
-                truth=truth,
-                extents=[
-                    [t - 5 * np.std(sample_ff[:, i]), t + 5 * np.std(sample_ff[:, i])]
-                    for i, t in enumerate(truth)
-                ],
-            )
+else:
 
-            plt.savefig("./exp{}/fig/contour_plot_step{}".format(PATH, batch))
+    def unnormalized_log_prob(theta):
+        oc, ob, s8, h0, ns, w0 = theta
 
-jnp.save("./exp{}/posteriors_sample".format(PATH), sample_nd)
+        prior = dist.TruncatedNormal(0.2664, 0.2, low=0).log_prob(oc)
+        prior += dist.Normal(0.0492, 0.006).log_prob(ob)
+        prior += dist.Normal(0.831, 0.14).log_prob(s8)
+        prior += dist.Normal(0.6727, 0.063).log_prob(h0)
+        prior += dist.Normal(0.9645, 0.08).log_prob(ns)
+        prior += dist.TruncatedNormal(-1.0, 0.9, low=-2.0, high=-0.3).log_prob(w0)
 
-import csv
+        likelihood = log_prob_fn(
+            params,
+            theta.reshape([1, dim]),
+            jnp.array(m_data_comressed).reshape([1, dim]),
+        )
+
+        return likelihood + prior
+
+    # Initialize the HMC transition kernel.
+    num_results = int(5e4)
+    num_burnin_steps = int(5e2)
+    adaptive_hmc = tfp.mcmc.SimpleStepSizeAdaptation(
+        tfp.mcmc.HamiltonianMonteCarlo(
+            target_log_prob_fn=unnormalized_log_prob,
+            num_leapfrog_steps=3,
+            step_size=1e-2,
+        ),
+        num_adaptation_steps=int(num_burnin_steps * 0.8),
+    )
+
+    # Run the chain (with burn-in).
+    @jax.jit
+    def run_chain():
+        # Run the chain (with burn-in).
+        samples, is_accepted = tfp.mcmc.sample_chain(
+            num_results=num_results,
+            num_burnin_steps=num_burnin_steps,
+            current_state=jnp.array(truth),
+            kernel=adaptive_hmc,
+            trace_fn=lambda _, pkr: pkr.inner_results.is_accepted,
+            seed=jax.random.PRNGKey(0),
+        )
+
+        return samples, is_accepted
+
+    samples_hmc, is_accepted_hmc = run_chain()
+    sample_nd = samples_hmc[is_accepted_hmc].reshape([-1, 6])
+    inds = np.random.randint(0, len(sample_nd), len(sample_ff))
+
+    sample_nd = sample_nd[inds, ...]
+
+
+plt.figure()
+c = ChainConsumer()
+c.add_chain(
+    sample_ff,
+    parameters=params_name,
+    name="Full Field HMC",
+    shade_alpha=0.5,
+)
+c.add_chain(
+    sample_nd,
+    parameters=params_name,
+    name="Full Field SBI",
+    shade_alpha=0.5,
+)
+fig = c.plotter.plot(
+    figsize=1.2,
+    truth=truth,
+    extents=[
+        [t - 5 * np.std(sample_ff[:, i]), t + 5 * np.std(sample_ff[:, i])]
+        for i, t in enumerate(truth)
+    ],
+)
+
+plt.savefig(f"./exp{PATH}/fig/contour_plot_step{batch}")
+jnp.save(f"./exp{PATH}/posteriors_sample", sample_nd)
+
 
 field_names = [
     "experiment_id",
@@ -381,7 +467,7 @@ field_names = [
     "seed",
 ]
 dict = {
-    "experiment_id": "exp{}".format(PATH),
+    "experiment_id": f"exp{PATH}",
     "activ_fun": activ_fun_string,
     "lr_schedule": lr_schedule_string,
     "total_steps": args.total_steps,
