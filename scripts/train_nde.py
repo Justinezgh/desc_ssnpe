@@ -170,7 +170,7 @@ if args.npe and args.prior is False:
     prob_max = jnp.max(probs)
 
 else:
-    probs = jnp.zeros(nb_simulations_allow)
+    probs = jnp.zeros(len(dataset.item()['y']))
     prob_max = 0
 
 inds = jnp.unique(jnp.where(jnp.isnan(dataset.item()['score']))[0])
