@@ -45,19 +45,8 @@ parser.add_argument("--prior", type=bool, default=False)
 parser.add_argument("--npe", type=bool, default=True)
 args = parser.parse_args()
 
-print("total_steps:", args.total_steps)
-print("score_weight:", args.score_weight)
-print("exp_id:", args.exp_id[4:])
-print("seed:", args.seed)
-print("n_flow_layers:", args.n_flow_layers)
-print("n_bijector_layers:", args.n_bijector_layers)
-print("activ_fun:", args.activ_fun)
-print("lr_schedule:", args.lr_schedule)
-print("prior:", args.prior)
-print("npe:", args.npe)
 
-
-######## ARAMS ########
+######## PARAMS ########
 print("######## PARAMS ########")
 total_steps = args.total_steps
 batch_size = 256
@@ -85,6 +74,17 @@ if args.prior:
     proposal = "prior"
 else:
     proposal = "ps"
+
+print("total_steps:", total_steps)
+print("score_weight:", score_weight)
+print("exp_id:", args.exp_id[4:])
+print("seed:", args.seed)
+print("n_flow_layers:", args.n_flow_layers)
+print("n_bijector_layers:", args.n_bijector_layers)
+print("activ_fun:", activ_fun_string)
+print("lr_schedule:", lr_schedule_string)
+print("prior:", args.prior)
+print("npe:", args.npe)
 
 
 PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
