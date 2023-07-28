@@ -163,6 +163,23 @@ else:
         )["arr_0"]
 
 
+if args.npe and args.prior is False:
+    probs = jnp.load(
+        f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/probs_ps_likelihood.npy"
+    )
+    prob_max = jnp.max(probs)
+
+else:
+    probs = jnp.zeros(nb_simulations_allow)
+    prob_max = 0
+
+inds = jnp.unique(jnp.where(jnp.isnan(dataset.item()['score']))[0])
+dataset_y = jnp.delete(dataset.item()['y'], inds, axis = 0)
+dataset_score = jnp.delete(dataset.item()['score'], inds, axis = 0)
+dataset_theta = jnp.delete(dataset.item()['theta'], inds, axis = 0)
+probs = jnp.delete(probs, inds, axis = 0)
+
+
 ######## COMPRESSOR ########
 print("######## COMPRESSOR ########")
 
@@ -250,23 +267,8 @@ else:
         hk.transform(lambda theta, y: SmoothNPE()(theta).log_prob(y).squeeze())
     )
 
-
 def log_prob_fn(params, theta, y):
     return nvp_nd.apply(params, theta, y)
-
-
-######## LOSSES & UPDATE FUN ########
-print("######## LOSSES & UPDATE FUN ########")
-
-if args.npe and args.prior is False:
-    probs = jnp.load(
-        f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/probs_ps_likelihood.npy"
-    )
-    prob_max = jnp.max(probs)
-
-else:
-    probs = jnp.zeros(nb_simulations_allow)
-    prob_max = 0
 
 
 ######## LOSSES & UPDATE FUN ########
@@ -338,9 +340,9 @@ pbar = tqdm(range(total_steps + 1))
 
 for batch in pbar:
     inds = np.random.randint(0, nb_simulations_allow, batch_size)
-    ex_theta = dataset.item()["theta"][inds]
-    ex_y = dataset.item()["y"][inds]
-    ex_score = dataset.item()["score"][inds]
+    ex_theta = dataset_theta[inds]
+    ex_y = dataset_y[inds]
+    ex_score = dataset_score[inds]
     ex_weight = probs[inds]
 
     if not jnp.isnan(ex_y).any():
