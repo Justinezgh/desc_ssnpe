@@ -265,7 +265,7 @@ if args.npe and args.prior is False:
     prob_max = jnp.max(probs)
 
 else:
-    probs = 0
+    probs = jnp.zeros(nb_simulations_allow)
     prob_max = 0
 
 
