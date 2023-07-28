@@ -56,7 +56,8 @@ else:
     npe = True
 
 ######## PARAMS ########
-print("######## PARAMS ########")
+print('... set params')
+
 total_steps = args.total_steps
 batch_size = 256
 tmp = list(range(0, 101_000, 5000))
@@ -95,7 +96,6 @@ print("lr_schedule:", lr_schedule_string)
 print("proposal:", proposal)
 print("sbi method:", sbi_method)
 
-
 PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
     sbi_method,
     proposal,
@@ -112,9 +112,10 @@ PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
 os.makedirs(f"./exp{PATH}/save_params")
 os.makedirs(f"./exp{PATH}/fig")
 
+print('done ✓')
 
 ######## CONFIG LSST Y 10 ########
-print("######## CONFIG LSST Y 10 ########")
+print('... prepare config lsst year 10')
 dim = 6
 
 N = config_lsst_y_10.N
@@ -130,8 +131,11 @@ truth = config_lsst_y_10.truth
 
 params_name = config_lsst_y_10.params_name_latex
 
+print('done ✓')
+
 ######## LOAD OBSERVATION AND REFERENCES POSTERIOR ########
-print("######## LOAD OBSERVATION AND REFERENCES POSTERIOR ########")
+print('... load observation and reference posterior')
+
 
 # load reference posterior
 sample_ff = jnp.load(
@@ -143,8 +147,10 @@ m_data = jnp.load(
     f"{args.path_to_access_sbi_lens}/sbi_lens/sbi_lens/data/m_data__256N_10ms_27gpa_0.26se.npy"
 )
 
+print('done ✓')
+
 ######## DATASET ########
-print("######## DATASET ########")
+print('... load dataset')
 
 if args.npe:
     if args.prior:
@@ -188,9 +194,10 @@ dataset_score = jnp.delete(dataset.item()['score'], inds, axis = 0)
 dataset_theta = jnp.delete(dataset.item()['theta'], inds, axis = 0)
 probs = jnp.delete(probs, inds, axis = 0)
 
+print('done ✓')
 
 ######## COMPRESSOR ########
-print("######## COMPRESSOR ########")
+print('... prepare compressor')
 
 compressor = hk.transform_with_state(lambda y: ResNet18(dim)(y, is_training=False))
 
@@ -210,8 +217,10 @@ m_data_comressed, _ = compressor.apply(
     parameters_compressor, opt_state_resnet, None, m_data.reshape([1, N, N, nbins])
 )
 
+print('done ✓')
+
 ######## CREATE NDE ########
-print("######## NDE ########")
+print('... build nde')
 
 key = jax.random.PRNGKey(0)
 
@@ -279,9 +288,10 @@ else:
 def log_prob_fn(params, theta, y):
     return nvp_nd.apply(params, theta, y)
 
+print('done ✓')
 
 ######## LOSSES & UPDATE FUN ########
-print("######## LOSSES & UPDATE FUN ########")
+print('... prepare loss and update functions')
 
 
 def loss_nll(params, mu, batch, weight, score, weight_score):
@@ -312,9 +322,10 @@ def update(params, opt_state, mu, batch, w, score, weight_score):
 
     return loss, new_params, new_opt_state
 
+print('done ✓')
 
 ######## TRAIN ########
-print("######## TRAIN ########")
+print('... TRAINING')
 
 params = nvp_nd.init(
     jax.random.PRNGKey(args.seed), 0.5 * jnp.ones([1, dim]), 0.5 * jnp.ones([1, dim])
@@ -366,6 +377,9 @@ for batch in pbar:
         if jnp.isnan(l):
             break
 
+print('done ✓')
+
+print('... save params and make plots')
 # save params
 with open(f"./exp{PATH}/save_params/params_ode_flow.pkl", "wb") as fp:
     pickle.dump(params, fp)
@@ -395,6 +409,7 @@ if args.npe:
 
 else:
 
+    print('... run mcmc for nle sampling')
     def unnormalized_log_prob(theta):
         oc, ob, s8, h0, ns, w0 = theta
 
@@ -414,8 +429,8 @@ else:
         return likelihood + prior
 
     # Initialize the HMC transition kernel.
-    num_results = int(5e4)
-    num_burnin_steps = int(5e2)
+    num_results = int(1e5)
+    num_burnin_steps = int(2e2)
     adaptive_hmc = tfp.mcmc.SimpleStepSizeAdaptation(
         tfp.mcmc.HamiltonianMonteCarlo(
             target_log_prob_fn=unnormalized_log_prob,
@@ -473,6 +488,9 @@ fig = c.plotter.plot(
 plt.savefig(f"./exp{PATH}/fig/contour_plot_step{batch}")
 jnp.save(f"./exp{PATH}/posteriors_sample", sample_nd)
 
+print('done ✓')
+
+print('... save info job')
 
 field_names = [
     "experiment_id",
@@ -508,3 +526,5 @@ dict = {
 with open("./store_experiments.csv", "a") as csv_file:
     dict_object = csv.DictWriter(csv_file, fieldnames=field_names)
     dict_object.writerow(dict)
+
+print('done ✓')
