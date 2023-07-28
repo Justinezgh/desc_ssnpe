@@ -87,7 +87,7 @@ else:
     proposal = "ps"
 
 
-PATH = "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
+PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
     sbi_method,
     proposal,
     total_steps,
@@ -128,21 +128,6 @@ print("######## LOAD OBSERVATION AND REFERENCES POSTERIOR ########")
 sample_ff = jnp.load(
     f"{args.path_to_access_sbi_lens}/sbi_lens/sbi_lens/data/posterior_full_field__256N_10ms_27gpa_0.26se.npy"
 )
-# load sbi ref posterior
-if nb_simulations_allow != 100_000:
-    PATH_REF = "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
-        sbi_method,
-        proposal,
-        total_steps,
-        score_weight,
-        nb_simulations_allow,
-        float(0),
-        100_000,
-        0,
-        args.n_flow_layers,
-        args.n_bijector_layers,
-    )
-    sample_ref_sbi = jnp.load(f"./exp{PATH_REF}/posteriors_sample.npy")
 
 # plot observed mass map
 m_data = jnp.load(
