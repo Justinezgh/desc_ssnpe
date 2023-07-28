@@ -40,9 +40,9 @@ parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--n_flow_layers", type=int, default=4)
 parser.add_argument("--n_bijector_layers", type=int, default=2)
 parser.add_argument("--activ_fun", type=int, default=0)
-parser.add_argument("--lr_schedule", type=int, default=1)
 parser.add_argument("--prior", type=bool, default=False)
 parser.add_argument("--npe", type=bool, default=True)
+parser.add_argument("--lr_schedule", type=int, default=1)
 args = parser.parse_args()
 
 
