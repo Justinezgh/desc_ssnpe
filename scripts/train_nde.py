@@ -92,8 +92,8 @@ print("n_flow_layers:", args.n_flow_layers)
 print("n_bijector_layers:", args.n_bijector_layers)
 print("activ_fun:", activ_fun_string)
 print("lr_schedule:", lr_schedule_string)
-print("prior:", proposal)
-print("npe:", sbi_method)
+print("proposal:", proposal)
+print("sbi method:", sbi_method)
 
 
 PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
