@@ -56,7 +56,9 @@ else:
     npe = True
 
 ######## PARAMS ########
-print('... set params')
+print('PARAMS')
+print('---------------------')
+print('---------------------')
 
 total_steps = args.total_steps
 batch_size = 256
@@ -96,6 +98,9 @@ print("lr_schedule:", lr_schedule_string)
 print("proposal:", proposal)
 print("sbi method:", sbi_method)
 
+print('---------------------')
+print('---------------------')
+
 PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
     sbi_method,
     proposal,
@@ -112,7 +117,6 @@ PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
 os.makedirs(f"./exp{PATH}/save_params")
 os.makedirs(f"./exp{PATH}/fig")
 
-print('done ✓')
 
 ######## CONFIG LSST Y 10 ########
 print('... prepare config lsst year 10')
