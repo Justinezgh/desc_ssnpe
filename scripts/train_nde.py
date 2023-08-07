@@ -507,8 +507,6 @@ field_names = [
     "score_weight",
     "n_flow_layers",
     "n_bijector_layers",
-    "c2st",
-    "nlp",
     "seed",
 ]
 dict = {
@@ -522,8 +520,6 @@ dict = {
     "score_weight": args.score_weight,
     "n_flow_layers": args.n_flow_layers,
     "n_bijector_layers": args.n_bijector_layers,
-    "c2st": None,
-    "nlp": None,
     "seed": args.seed,
 }
 
