@@ -385,7 +385,7 @@ print('done ✓')
 
 print('... save params and make plots')
 # save params
-with open(f"./exp{PATH}/save_params/params_ode_flow.pkl", "wb") as fp:
+with open(f"./exp{PATH}/save_params/params_flow.pkl", "wb") as fp:
     pickle.dump(params, fp)
 
 # save plot loss
