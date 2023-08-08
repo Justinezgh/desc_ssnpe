@@ -56,8 +56,7 @@ else:
     npe = True
 
 ######## PARAMS ########
-print('PARAMS')
-print('---------------------')
+print('PARAMS---------------')
 print('---------------------')
 
 total_steps = args.total_steps
@@ -385,7 +384,7 @@ print('done ✓')
 
 print('... save params and make plots')
 # save params
-with open(f"./exp{PATH}/save_params/params_ode_flow.pkl", "wb") as fp:
+with open(f"./exp{PATH}/save_params/params_flow.pkl", "wb") as fp:
     pickle.dump(params, fp)
 
 # save plot loss
@@ -507,8 +506,6 @@ field_names = [
     "score_weight",
     "n_flow_layers",
     "n_bijector_layers",
-    "c2st",
-    "nlp",
     "seed",
 ]
 dict = {
@@ -522,12 +519,10 @@ dict = {
     "score_weight": args.score_weight,
     "n_flow_layers": args.n_flow_layers,
     "n_bijector_layers": args.n_bijector_layers,
-    "c2st": None,
-    "nlp": None,
     "seed": args.seed,
 }
 
-with open("./store_experiments.csv", "a") as csv_file:
+with open("./results/store_experiments.csv", "a") as csv_file:
     dict_object = csv.DictWriter(csv_file, fieldnames=field_names)
     dict_object.writerow(dict)
 
