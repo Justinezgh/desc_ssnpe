@@ -49,15 +49,13 @@ args = parser.parse_args()
 print("PARAMS---------------")
 print("---------------------")
 
-total_steps = args.total_steps
 batch_size = 256
 tmp = list(range(0, 101_000, 5000))
 tmp[0] = 1000
 nb_simulations_allow = tmp[int(args.exp_id[4:])]
-score_weight = args.score_weight
 
-print("total_steps:", total_steps)
-print("score_weight:", score_weight)
+print("total_steps:", args.total_steps)
+print("score_weight:", args.score_weight)
 print("exp_id:", args.exp_id[4:])
 print("seed:", args.seed)
 print("n_flow_layers:", args.n_flow_layers)
@@ -73,8 +71,8 @@ print("---------------------")
 PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
     args.sbi_method,
     args.proposal,
-    total_steps,
-    score_weight,
+    args.total_steps,
+    args.score_weight,
     nb_simulations_allow,
     args.seed,
     args.n_flow_layers,
@@ -316,17 +314,17 @@ if args.lr_schedule == 'p_c_s':
     lr_scheduler = optax.piecewise_constant_schedule(
         init_value=0.001,
         boundaries_and_scales={
-            int(total_steps * 0.4): 0.2,
-            int(total_steps * 0.6): 0.3,
-            int(total_steps * 0.8): 0.4,
-            int(total_steps * 1): 0.5,
+            int(args.total_steps * 0.4): 0.2,
+            int(args.total_steps * 0.6): 0.3,
+            int(args.total_steps * 0.8): 0.4,
+            int(args.total_steps * 1): 0.5,
         },
     )
 
 elif args.lr_schedule == 'exp_decay':
     lr_scheduler = optax.exponential_decay(
         init_value=0.001,
-        transition_steps=total_steps // 50,
+        transition_steps=args.total_steps // 50,
         decay_rate=0.9,
         end_value=1e-5,
     )
@@ -336,7 +334,7 @@ opt_state = optimizer.init(params)
 
 batch_loss = []
 lr_scheduler_store = []
-pbar = tqdm(range(total_steps + 1))
+pbar = tqdm(range(args.total_steps + 1))
 
 for batch in pbar:
     inds = np.random.randint(0, nb_simulations_allow, batch_size)
@@ -347,7 +345,7 @@ for batch in pbar:
 
     if not jnp.isnan(ex_y).any():
         l, params, opt_state = update(
-            params, opt_state, ex_theta, ex_y, ex_weight, ex_score, score_weight
+            params, opt_state, ex_theta, ex_y, ex_weight, ex_score, args.score_weight
         )
 
         batch_loss.append(l)
