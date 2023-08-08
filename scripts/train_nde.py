@@ -113,8 +113,8 @@ PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
     args.lr_schedule,
 )
 
-os.makedirs(f"./exp{PATH}/save_params")
-os.makedirs(f"./exp{PATH}/fig")
+os.makedirs(f"./results/experiments/exp{PATH}/save_params")
+os.makedirs(f"./results/experiments/exp{PATH}/fig")
 
 
 ######## CONFIG LSST Y 10 ########
@@ -384,20 +384,20 @@ print('done ✓')
 
 print('... save params and make plots')
 # save params
-with open(f"./exp{PATH}/save_params/params_flow.pkl", "wb") as fp:
+with open(f"./results/experiments/exp{PATH}/save_params/params_flow.pkl", "wb") as fp:
     pickle.dump(params, fp)
 
 # save plot loss
 plt.figure()
 plt.plot(batch_loss[10:])
 plt.title("Batch Loss")
-plt.savefig(f"./exp{PATH}/fig/loss")
+plt.savefig(f"./results/experiments/exp{PATH}/fig/loss")
 
 # save plot loss
 plt.figure()
 plt.plot(lr_scheduler_store)
 plt.title("lr schedule")
-plt.savefig(f"./exp{PATH}/fig/lr_schedule")
+plt.savefig(f"./results/experiments/exp{PATH}/fig/lr_schedule")
 
 if args.npe:
     # save contour plot
@@ -488,8 +488,8 @@ fig = c.plotter.plot(
     ],
 )
 
-plt.savefig(f"./exp{PATH}/fig/contour_plot_step{batch}")
-jnp.save(f"./exp{PATH}/posteriors_sample", sample_nd)
+plt.savefig(f"./results/experiments/exp{PATH}/fig/contour_plot_step{batch}")
+jnp.save(f"./results/experiments/exp{PATH}/posteriors_sample", sample_nd)
 
 print('done ✓')
 
