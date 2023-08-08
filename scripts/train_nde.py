@@ -16,7 +16,7 @@ import tensorflow_probability as tfp
 from chainconsumer import ChainConsumer
 from haiku._src.nets.resnet import ResNet18
 from sbi_lens.config import config_lsst_y_10
-from sbi_lens.normflow.models import AffineSigmoidCoupling, ConditionalRealNVP
+from sbi_lens.normflow.models import AffineSigmoidCoupling, AffineCoupling, ConditionalRealNVP
 from tqdm import tqdm
 
 tfp = tfp.experimental.substrates.jax
@@ -43,6 +43,7 @@ parser.add_argument("--activ_fun", type=str, default='silu')
 parser.add_argument("--proposal", type=str, default='ps')
 parser.add_argument("--sbi_method", type=str, default='npe')
 parser.add_argument("--lr_schedule", type=str, default='exp_decay')
+parser.add_argument("--nf", type=str, default='smooth')
 args = parser.parse_args()
 
 ######## PARAMS ########
@@ -64,6 +65,7 @@ print("activ_fun:", args.activ_fun)
 print("lr_schedule:", args.lr_schedule)
 print("proposal:", args.proposal)
 print("sbi method:", args.sbi_method)
+print("nf type:", args.nf)
 
 print("---------------------")
 print("---------------------")
@@ -199,65 +201,86 @@ print("... build nde")
 
 key = jax.random.PRNGKey(0)
 
-if args.sbi_method == 'npe':
-    omega_c = dist.TruncatedNormal(0.2664, 0.2, low=0).sample(key, (1000,))
-    omega_b = dist.Normal(0.0492, 0.006).sample(key, (1000,))
-    sigma_8 = dist.Normal(0.831, 0.14).sample(key, (1000,))
-    h_0 = dist.Normal(0.6727, 0.063).sample(key, (1000,))
-    n_s = dist.Normal(0.9645, 0.08).sample(key, (1000,))
-    w_0 = dist.TruncatedNormal(-1.0, 0.9, low=-2.0, high=-0.3).sample(key, (1000,))
-
-    theta = jnp.stack([omega_c, omega_b, sigma_8, h_0, n_s, w_0], axis=-1)
-
-    scale = jnp.std(theta, axis=0) / 0.07
-    shift = jnp.mean(theta / scale, axis=0) - 0.5
-
-elif args.sbi_method == 'nle':
-    # how these qantities are comute (with dataset form prior)
-    # scale_y = jnp.std(dataset_y, axis=0) / 0.07
-    # shift_y = jnp.mean(dataset_y / scale_y, axis=0) - 0.5
-
-    scale = jnp.array(
-        [1.2179337, 1.9040986, 2.070386, 1.9527259, 1.0068599, 0.38351834]
-    )
-    shift = jnp.array(
-        [-0.51705444, -0.39985067, -0.53731424, -0.3843186, -0.5539374, -0.33893403]
-    )
-
-bijector_layers = [128] * args.n_bijector_layers
-
 if args.activ_fun == 'silu':
-    activ_fun = jax.nn.silu
+        activ_fun = jax.nn.silu
 elif args.activ_fun == 'sin':
     activ_fun = jnp.sin
 
-bijector_npe = partial(
-    AffineSigmoidCoupling, layers=bijector_layers, activation=activ_fun, n_components=16
-)
+if args.nf == 'smooth':
 
-NF_npe = partial(
-    ConditionalRealNVP, n_layers=args.n_flow_layers, bijector_fn=bijector_npe
-)
+    if args.sbi_method == 'npe':
+        omega_c = dist.TruncatedNormal(0.2664, 0.2, low=0).sample(key, (1000,))
+        omega_b = dist.Normal(0.0492, 0.006).sample(key, (1000,))
+        sigma_8 = dist.Normal(0.831, 0.14).sample(key, (1000,))
+        h_0 = dist.Normal(0.6727, 0.063).sample(key, (1000,))
+        n_s = dist.Normal(0.9645, 0.08).sample(key, (1000,))
+        w_0 = dist.TruncatedNormal(-1.0, 0.9, low=-2.0, high=-0.3).sample(key, (1000,))
 
+        theta = jnp.stack([omega_c, omega_b, sigma_8, h_0, n_s, w_0], axis=-1)
 
-class SmoothNPE(hk.Module):
-    def __call__(self, y):
-        nvp = NF_npe(dim)(y)
-        return tfd.TransformedDistribution(
-            nvp, tfb.Chain([tfb.Scale(scale), tfb.Shift(shift)])
+        scale = jnp.std(theta, axis=0) / 0.07
+        shift = jnp.mean(theta / scale, axis=0) - 0.5
+
+    elif args.sbi_method == 'nle':
+        # how these qantities are comute (with dataset form prior)
+        # scale_y = jnp.std(dataset_y, axis=0) / 0.07
+        # shift_y = jnp.mean(dataset_y / scale_y, axis=0) - 0.5
+
+        scale = jnp.array(
+            [1.2179337, 1.9040986, 2.070386, 1.9527259, 1.0068599, 0.38351834]
         )
+        shift = jnp.array(
+            [-0.51705444, -0.39985067, -0.53731424, -0.3843186, -0.5539374, -0.33893403]
+        )
+
+    bijector_layers = [128] * args.n_bijector_layers
+
+    bijector = partial(
+        AffineSigmoidCoupling, layers=bijector_layers, activation=activ_fun, n_components=16
+    )
+
+    NF = partial(
+        ConditionalRealNVP, n_layers=args.n_flow_layers, bijector_fn=bijector
+    )
+
+
+    class NDE(hk.Module):
+        def __call__(self, y):
+            nvp = NF(dim)(y)
+            return tfd.TransformedDistribution(
+                nvp, tfb.Chain([tfb.Scale(scale), tfb.Shift(shift)])
+            )
+
+elif args.nf == 'affine': 
+
+    bijector_layers = [128] * args.n_bijector_layers
+
+    bijector = partial(
+        AffineCoupling, layers=bijector_layers, activation=activ_fun
+    )
+
+    NF = partial(
+        ConditionalRealNVP, n_layers=args.n_flow_layers, bijector_fn=bijector
+    )
+    class NDE(hk.Module):
+        def __call__(self, y):
+            return NF(dim)(y)
+
+
+if args.nf == 'affine' and args.sbi_method == 'npe' and args.score_weight > 0:
+    raise ValueError('NDE has to be smooth')
 
 
 if args.sbi_method == 'npe':
     nvp_nd = hk.without_apply_rng(
-        hk.transform(lambda theta, y: SmoothNPE()(y).log_prob(theta).squeeze())
+        hk.transform(lambda theta, y: NDE()(y).log_prob(theta).squeeze())
     )
     nvp_sample_nd = hk.transform(
-        lambda y: SmoothNPE()(y).sample(len(sample_ff), seed=hk.next_rng_key())
+        lambda y: NDE()(y).sample(len(sample_ff), seed=hk.next_rng_key())
     )
 elif args.sbi_method == 'nle':
     nvp_nd = hk.without_apply_rng(
-        hk.transform(lambda theta, y: SmoothNPE()(theta).log_prob(y).squeeze())
+        hk.transform(lambda theta, y: NDE()(theta).log_prob(y).squeeze())
     )
 
 
