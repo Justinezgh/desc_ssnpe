@@ -45,16 +45,6 @@ parser.add_argument("--npe", type=int, default=1)
 parser.add_argument("--lr_schedule", type=int, default=1)
 args = parser.parse_args()
 
-if args.prior == 0:
-    prior = False
-else:
-    prior = True
-
-if args.npe == 0:
-    npe = False
-else:
-    npe = True
-
 ######## PARAMS ########
 print("PARAMS---------------")
 print("---------------------")
@@ -66,15 +56,15 @@ tmp[0] = 1000
 nb_simulations_allow = tmp[int(args.exp_id[4:])]
 score_weight = args.score_weight
 
-if args.activ_fun == 0:
-    activ_fun_string = "silu"
-elif args.activ_fun == 1:
+if args.activ_fun:
     activ_fun_string = "sin"
+else:
+    activ_fun_string = "silu"
 
-if args.lr_schedule == 0:
-    lr_schedule_string = "p_c_s"
-elif args.lr_schedule == 1:
+if args.lr_schedule:
     lr_schedule_string = "exp_decay"
+else:
+    lr_schedule_string = "p_c_s"
 
 if args.npe:
     sbi_method = "npe"
