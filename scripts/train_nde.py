@@ -45,19 +45,19 @@ parser.add_argument("--npe", type=int, default=1)
 parser.add_argument("--lr_schedule", type=int, default=1)
 args = parser.parse_args()
 
-if args.prior == 0: 
-    prior = False 
-else : 
-    prior = True 
+if args.prior == 0:
+    prior = False
+else:
+    prior = True
 
-if args.npe == 0: 
-    npe = False 
-else: 
+if args.npe == 0:
+    npe = False
+else:
     npe = True
 
 ######## PARAMS ########
-print('PARAMS---------------')
-print('---------------------')
+print("PARAMS---------------")
+print("---------------------")
 
 total_steps = args.total_steps
 batch_size = 256
@@ -97,8 +97,8 @@ print("lr_schedule:", lr_schedule_string)
 print("proposal:", proposal)
 print("sbi method:", sbi_method)
 
-print('---------------------')
-print('---------------------')
+print("---------------------")
+print("---------------------")
 
 PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
     sbi_method,
@@ -113,12 +113,16 @@ PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
     args.lr_schedule,
 )
 
-os.makedirs(f"./results/experiments/exp{PATH}/save_params")
-os.makedirs(f"./results/experiments/exp{PATH}/fig")
+os.makedirs(
+    f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/results/experiments/exp{PATH}/save_params"
+)
+os.makedirs(
+    f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/results/experiments/exp{PATH}/fig"
+)
 
 
 ######## CONFIG LSST Y 10 ########
-print('... prepare config lsst year 10')
+print("... prepare config lsst year 10")
 dim = 6
 
 N = config_lsst_y_10.N
@@ -134,10 +138,10 @@ truth = config_lsst_y_10.truth
 
 params_name = config_lsst_y_10.params_name_latex
 
-print('done ✓')
+print("done ✓")
 
 ######## LOAD OBSERVATION AND REFERENCES POSTERIOR ########
-print('... load observation and reference posterior')
+print("... load observation and reference posterior")
 
 
 # load reference posterior
@@ -150,10 +154,10 @@ m_data = jnp.load(
     f"{args.path_to_access_sbi_lens}/sbi_lens/sbi_lens/data/m_data__256N_10ms_27gpa_0.26se.npy"
 )
 
-print('done ✓')
+print("done ✓")
 
 ######## DATASET ########
-print('... load dataset')
+print("... load dataset")
 
 if args.npe:
     if args.prior:
@@ -188,19 +192,19 @@ if args.npe and args.prior is False:
     prob_max = jnp.max(probs)
 
 else:
-    probs = jnp.zeros(len(dataset.item()['y']))
+    probs = jnp.zeros(len(dataset.item()["y"]))
     prob_max = 0
 
-inds = jnp.unique(jnp.where(jnp.isnan(dataset.item()['score']))[0])
-dataset_y = jnp.delete(dataset.item()['y'], inds, axis = 0)
-dataset_score = jnp.delete(dataset.item()['score'], inds, axis = 0)
-dataset_theta = jnp.delete(dataset.item()['theta'], inds, axis = 0)
-probs = jnp.delete(probs, inds, axis = 0)
+inds = jnp.unique(jnp.where(jnp.isnan(dataset.item()["score"]))[0])
+dataset_y = jnp.delete(dataset.item()["y"], inds, axis=0)
+dataset_score = jnp.delete(dataset.item()["score"], inds, axis=0)
+dataset_theta = jnp.delete(dataset.item()["theta"], inds, axis=0)
+probs = jnp.delete(probs, inds, axis=0)
 
-print('done ✓')
+print("done ✓")
 
 ######## COMPRESSOR ########
-print('... prepare compressor')
+print("... prepare compressor")
 
 compressor = hk.transform_with_state(lambda y: ResNet18(dim)(y, is_training=False))
 
@@ -220,10 +224,10 @@ m_data_comressed, _ = compressor.apply(
     parameters_compressor, opt_state_resnet, None, m_data.reshape([1, N, N, nbins])
 )
 
-print('done ✓')
+print("done ✓")
 
 ######## CREATE NDE ########
-print('... build nde')
+print("... build nde")
 
 key = jax.random.PRNGKey(0)
 
@@ -288,13 +292,15 @@ else:
         hk.transform(lambda theta, y: SmoothNPE()(theta).log_prob(y).squeeze())
     )
 
+
 def log_prob_fn(params, theta, y):
     return nvp_nd.apply(params, theta, y)
 
-print('done ✓')
+
+print("done ✓")
 
 ######## LOSSES & UPDATE FUN ########
-print('... prepare loss and update functions')
+print("... prepare loss and update functions")
 
 
 def loss_nll(params, mu, batch, weight, score, weight_score):
@@ -325,10 +331,11 @@ def update(params, opt_state, mu, batch, w, score, weight_score):
 
     return loss, new_params, new_opt_state
 
-print('done ✓')
+
+print("done ✓")
 
 ######## TRAIN ########
-print('... TRAINING')
+print("... TRAINING")
 
 params = nvp_nd.init(
     jax.random.PRNGKey(args.seed), 0.5 * jnp.ones([1, dim]), 0.5 * jnp.ones([1, dim])
@@ -380,24 +387,31 @@ for batch in pbar:
         if jnp.isnan(l):
             break
 
-print('done ✓')
+print("done ✓")
 
-print('... save params and make plots')
+print("... save params and make plots")
 # save params
-with open(f"./results/experiments/exp{PATH}/save_params/params_flow.pkl", "wb") as fp:
+with open(
+    f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/results/experiments/exp{PATH}/save_params/params_flow.pkl",
+    "wb",
+) as fp:
     pickle.dump(params, fp)
 
 # save plot loss
 plt.figure()
 plt.plot(batch_loss[10:])
 plt.title("Batch Loss")
-plt.savefig(f"./results/experiments/exp{PATH}/fig/loss")
+plt.savefig(
+    f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/results/experiments/exp{PATH}/fig/loss"
+)
 
 # save plot loss
 plt.figure()
 plt.plot(lr_scheduler_store)
 plt.title("lr schedule")
-plt.savefig(f"./results/experiments/exp{PATH}/fig/lr_schedule")
+plt.savefig(
+    f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/results/experiments/exp{PATH}/fig/lr_schedule"
+)
 
 if args.npe:
     # save contour plot
@@ -411,8 +425,8 @@ if args.npe:
     sample_nd = jnp.delete(sample_nd, idx, axis=0)
 
 else:
+    print("... run mcmc for nle sampling")
 
-    print('... run mcmc for nle sampling')
     def unnormalized_log_prob(theta):
         oc, ob, s8, h0, ns, w0 = theta
 
@@ -488,12 +502,17 @@ fig = c.plotter.plot(
     ],
 )
 
-plt.savefig(f"./results/experiments/exp{PATH}/fig/contour_plot_step{batch}")
-jnp.save(f"./results/experiments/exp{PATH}/posteriors_sample", sample_nd)
+plt.savefig(
+    f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/results/experiments/exp{PATH}/fig/contour_plot_step{batch}"
+)
+jnp.save(
+    f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/results/experiments/exp{PATH}/posteriors_sample",
+    sample_nd,
+)
 
-print('done ✓')
+print("done ✓")
 
-print('... save info job')
+print("... save info job")
 
 field_names = [
     "experiment_id",
@@ -522,8 +541,11 @@ dict = {
     "seed": args.seed,
 }
 
-with open("./results/store_experiments.csv", "a") as csv_file:
+with open(
+    f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/results/store_experiments.csv",
+    "a",
+) as csv_file:
     dict_object = csv.DictWriter(csv_file, fieldnames=field_names)
     dict_object.writerow(dict)
 
-print('done ✓')
+print("done ✓")
