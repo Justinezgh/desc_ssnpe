@@ -39,10 +39,10 @@ parser.add_argument("--exp_id", type=str, default=3)
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--n_flow_layers", type=int, default=4)
 parser.add_argument("--n_bijector_layers", type=int, default=2)
-parser.add_argument("--activ_fun", type=int, default=0)
-parser.add_argument("--prior", type=int, default=1)
-parser.add_argument("--npe", type=int, default=1)
-parser.add_argument("--lr_schedule", type=int, default=1)
+parser.add_argument("--activ_fun", type=str, default='silu')
+parser.add_argument("--proposal", type=str, default='ps')
+parser.add_argument("--sbi_method", type=str, default='npe')
+parser.add_argument("--lr_schedule", type=str, default='exp_decay')
 args = parser.parse_args()
 
 ######## PARAMS ########
@@ -56,50 +56,30 @@ tmp[0] = 1000
 nb_simulations_allow = tmp[int(args.exp_id[4:])]
 score_weight = args.score_weight
 
-if args.activ_fun:
-    activ_fun_string = "sin"
-else:
-    activ_fun_string = "silu"
-
-if args.lr_schedule:
-    lr_schedule_string = "exp_decay"
-else:
-    lr_schedule_string = "p_c_s"
-
-if args.npe:
-    sbi_method = "npe"
-else:
-    sbi_method = "nle"
-
-if args.prior:
-    proposal = "prior"
-else:
-    proposal = "ps"
-
 print("total_steps:", total_steps)
 print("score_weight:", score_weight)
 print("exp_id:", args.exp_id[4:])
 print("seed:", args.seed)
 print("n_flow_layers:", args.n_flow_layers)
 print("n_bijector_layers:", args.n_bijector_layers)
-print("activ_fun:", activ_fun_string)
-print("lr_schedule:", lr_schedule_string)
-print("proposal:", proposal)
-print("sbi method:", sbi_method)
+print("activ_fun:", args.activ_fun)
+print("lr_schedule:", args.lr_schedule)
+print("proposal:", args.proposal)
+print("sbi method:", args.sbi_method)
 
 print("---------------------")
 print("---------------------")
 
 PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
-    sbi_method,
-    proposal,
+    args.sbi_method,
+    args.proposal,
     total_steps,
     score_weight,
     nb_simulations_allow,
     args.seed,
     args.n_flow_layers,
     args.n_bijector_layers,
-    activ_fun_string,
+    args.activ_fun,
     args.lr_schedule,
 )
 
@@ -149,8 +129,8 @@ print("done ✓")
 ######## DATASET ########
 print("... load dataset")
 
-if args.npe:
-    if args.prior:
+if args.sbi_method == 'npe':
+    if args.proposal == 'prior':
         dataset = np.load(
             f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/LOADED&COMPRESSED_year_10_with_noise_score_density.npz",
             allow_pickle=True,
@@ -161,21 +141,21 @@ if args.npe:
             f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/LOADED&COMPRESSED_year_10_with_noise_score_density_proposal.npz",
             allow_pickle=True,
         )["arr_0"]
-else:
-    if args.prior:
-        dataset = np.load(
-            f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/LOADED&COMPRESSED_year_10_with_noise_score_conditional_proposal.npz",
-            allow_pickle=True,
-        )["arr_0"]
-
-    else:
+elif args.sbi_method == 'nle':
+    if args.proposal == 'prior':
         dataset = np.load(
             f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/LOADED&COMPRESSED_year_10_with_noise_score_conditional.npz",
             allow_pickle=True,
         )["arr_0"]
 
+    else:
+        dataset = np.load(
+            f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/LOADED&COMPRESSED_year_10_with_noise_score_conditional_proposal.npz",
+            allow_pickle=True,
+        )["arr_0"]
 
-if args.npe and args.prior is False:
+
+if args.sbi_method == 'npe' and args.proposal == 'ps':
     probs = jnp.load(
         f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/probs_ps_likelihood.npy"
     )
@@ -221,7 +201,7 @@ print("... build nde")
 
 key = jax.random.PRNGKey(0)
 
-if args.npe:
+if args.sbi_method == 'npe':
     omega_c = dist.TruncatedNormal(0.2664, 0.2, low=0).sample(key, (1000,))
     omega_b = dist.Normal(0.0492, 0.006).sample(key, (1000,))
     sigma_8 = dist.Normal(0.831, 0.14).sample(key, (1000,))
@@ -234,7 +214,7 @@ if args.npe:
     scale = jnp.std(theta, axis=0) / 0.07
     shift = jnp.mean(theta / scale, axis=0) - 0.5
 
-else:
+elif args.sbi_method == 'nle':
     # how these qantities are comute (with dataset form prior)
     # scale_y = jnp.std(dataset_y, axis=0) / 0.07
     # shift_y = jnp.mean(dataset_y / scale_y, axis=0) - 0.5
@@ -248,9 +228,9 @@ else:
 
 bijector_layers = [128] * args.n_bijector_layers
 
-if args.activ_fun == 0:
+if args.activ_fun == 'silu':
     activ_fun = jax.nn.silu
-elif args.activ_fun == 1:
+elif args.activ_fun == 'sin':
     activ_fun = jnp.sin
 
 bijector_npe = partial(
@@ -270,14 +250,14 @@ class SmoothNPE(hk.Module):
         )
 
 
-if args.npe:
+if args.sbi_method == 'npe':
     nvp_nd = hk.without_apply_rng(
         hk.transform(lambda theta, y: SmoothNPE()(y).log_prob(theta).squeeze())
     )
     nvp_sample_nd = hk.transform(
         lambda y: SmoothNPE()(y).sample(len(sample_ff), seed=hk.next_rng_key())
     )
-else:
+elif args.sbi_method == 'nle':
     nvp_nd = hk.without_apply_rng(
         hk.transform(lambda theta, y: SmoothNPE()(theta).log_prob(y).squeeze())
     )
@@ -332,7 +312,7 @@ params = nvp_nd.init(
 )
 
 # optimizer
-if args.lr_schedule == 0:
+if args.lr_schedule == 'p_c_s':
     lr_scheduler = optax.piecewise_constant_schedule(
         init_value=0.001,
         boundaries_and_scales={
@@ -343,7 +323,7 @@ if args.lr_schedule == 0:
         },
     )
 
-elif args.lr_schedule == 1:
+elif args.lr_schedule == 'exp_decay':
     lr_scheduler = optax.exponential_decay(
         init_value=0.001,
         transition_steps=total_steps // 50,
@@ -403,7 +383,7 @@ plt.savefig(
     f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/results/experiments/exp{PATH}/fig/lr_schedule"
 )
 
-if args.npe:
+if args.sbi_method == 'npe':
     # save contour plot
     sample_nd = nvp_sample_nd.apply(
         params,
@@ -414,7 +394,7 @@ if args.npe:
     idx = jnp.where(jnp.isnan(sample_nd))[0]
     sample_nd = jnp.delete(sample_nd, idx, axis=0)
 
-else:
+elif args.sbi_method == 'nle':
     print("... run mcmc for nle sampling")
 
     def unnormalized_log_prob(theta):
@@ -519,10 +499,10 @@ field_names = [
 ]
 dict = {
     "experiment_id": f"exp{PATH}",
-    "sbi_method": sbi_method,
-    "proposal": proposal,
-    "activ_fun": activ_fun_string,
-    "lr_schedule": lr_schedule_string,
+    "sbi_method": args.sbi_method,
+    "proposal": args.proposal,
+    "activ_fun": args.activ_fun,
+    "lr_schedule": args.lr_schedule,
     "total_steps": args.total_steps,
     "nb_simulations": nb_simulations_allow,
     "score_weight": args.score_weight,
