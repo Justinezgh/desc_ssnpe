@@ -60,6 +60,7 @@ tmp[0] = 1000
 nb_simulations_allow = tmp[int(args.exp_id[4:])]
 
 print("total_steps:", args.total_steps)
+print("simulation budget:", nb_simulations_allow)
 print("score_weight:", args.score_weight)
 print("exp_id:", args.exp_id[4:])
 print("seed:", args.seed)
