@@ -123,7 +123,7 @@ sample_ff = jnp.load(
     f"{args.path_to_access_sbi_lens}/sbi_lens/sbi_lens/data/posterior_full_field__256N_10ms_27gpa_0.26se.npy"
 )
 
-# plot observed mass map
+# load observed mass map
 m_data = jnp.load(
     f"{args.path_to_access_sbi_lens}/sbi_lens/sbi_lens/data/m_data__256N_10ms_27gpa_0.26se.npy"
 )
@@ -271,20 +271,20 @@ if args.nf == "affine" and args.sbi_method == "npe" and args.score_weight > 0:
 
 
 if args.sbi_method == "npe":
-    nvp_nd = hk.without_apply_rng(
+    nf_log_prob = hk.without_apply_rng(
         hk.transform(lambda theta, y: NDE()(y).log_prob(theta).squeeze())
     )
-    nvp_sample_nd = hk.transform(
+    nf_get_posterior_sample = hk.transform(
         lambda y: NDE()(y).sample(len(sample_ff), seed=hk.next_rng_key())
     )
 elif args.sbi_method == "nle":
-    nvp_nd = hk.without_apply_rng(
+    nf_log_prob = hk.without_apply_rng(
         hk.transform(lambda theta, y: NDE()(theta).log_prob(y).squeeze())
     )
 
 
 def log_prob_fn(params, theta, y):
-    return nvp_nd.apply(params, theta, y)
+    return nf_log_prob.apply(params, theta, y)
 
 
 print("done ✓")
@@ -327,7 +327,7 @@ print("done ✓")
 ######## TRAIN ########
 print("... TRAINING")
 
-params = nvp_nd.init(
+params = nf_log_prob.init(
     jax.random.PRNGKey(args.seed), 0.5 * jnp.ones([1, dim]), 0.5 * jnp.ones([1, dim])
 )
 
@@ -379,7 +379,7 @@ for batch in pbar:
 
 print("done ✓")
 
-print("... save params and make plots")
+print("... save params, make plots and sample posterior")
 # save params
 with open(
     f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/results/experiments/exp{PATH}/save_params/params_flow.pkl",
@@ -405,7 +405,7 @@ plt.savefig(
 
 if args.sbi_method == "npe":
     # save contour plot
-    sample_nd = nvp_sample_nd.apply(
+    sample_nd = nf_get_posterior_sample.apply(
         params,
         rng=jax.random.PRNGKey(43),
         y=m_data_comressed * jnp.ones([len(sample_ff), dim]),
@@ -508,7 +508,7 @@ jnp.save(
 
 print("done ✓")
 
-print("... save info job")
+print("... save info experiment")
 
 field_names = [
     "experiment_id",
