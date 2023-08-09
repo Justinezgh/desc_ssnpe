@@ -75,7 +75,7 @@ print("nf type:", args.nf)
 print("---------------------")
 print("---------------------")
 
-PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
+PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
     args.sbi_method,
     args.proposal,
     args.total_steps,
@@ -86,6 +86,7 @@ PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
     args.n_bijector_layers,
     args.activ_fun,
     args.lr_schedule,
+    args.nf
 )
 
 os.makedirs(
@@ -523,6 +524,7 @@ field_names = [
     "n_flow_layers",
     "n_bijector_layers",
     "seed",
+    "nf type"
 ]
 dict = {
     "experiment_id": f"exp{PATH}",
@@ -536,6 +538,7 @@ dict = {
     "n_flow_layers": args.n_flow_layers,
     "n_bijector_layers": args.n_bijector_layers,
     "seed": args.seed,
+    "nf type": args.nf
 }
 
 with open(
