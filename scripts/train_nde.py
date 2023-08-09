@@ -16,7 +16,11 @@ import tensorflow_probability as tfp
 from chainconsumer import ChainConsumer
 from haiku._src.nets.resnet import ResNet18
 from sbi_lens.config import config_lsst_y_10
-from sbi_lens.normflow.models import AffineSigmoidCoupling, AffineCoupling, ConditionalRealNVP
+from sbi_lens.normflow.models import (
+    AffineSigmoidCoupling,
+    AffineCoupling,
+    ConditionalRealNVP,
+)
 from tqdm import tqdm
 
 tfp = tfp.experimental.substrates.jax
@@ -39,11 +43,11 @@ parser.add_argument("--exp_id", type=str, default=3)
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--n_flow_layers", type=int, default=4)
 parser.add_argument("--n_bijector_layers", type=int, default=2)
-parser.add_argument("--activ_fun", type=str, default='silu')
-parser.add_argument("--proposal", type=str, default='ps')
-parser.add_argument("--sbi_method", type=str, default='npe')
-parser.add_argument("--lr_schedule", type=str, default='exp_decay')
-parser.add_argument("--nf", type=str, default='smooth')
+parser.add_argument("--activ_fun", type=str, default="silu")
+parser.add_argument("--proposal", type=str, default="ps")
+parser.add_argument("--sbi_method", type=str, default="npe")
+parser.add_argument("--lr_schedule", type=str, default="exp_decay")
+parser.add_argument("--nf", type=str, default="smooth")
 args = parser.parse_args()
 
 ######## PARAMS ########
@@ -129,8 +133,8 @@ print("done ✓")
 ######## DATASET ########
 print("... load dataset")
 
-if args.sbi_method == 'npe':
-    if args.proposal == 'prior':
+if args.sbi_method == "npe":
+    if args.proposal == "prior":
         dataset = np.load(
             f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/LOADED&COMPRESSED_year_10_with_noise_score_density.npz",
             allow_pickle=True,
@@ -141,8 +145,8 @@ if args.sbi_method == 'npe':
             f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/LOADED&COMPRESSED_year_10_with_noise_score_density_proposal.npz",
             allow_pickle=True,
         )["arr_0"]
-elif args.sbi_method == 'nle':
-    if args.proposal == 'prior':
+elif args.sbi_method == "nle":
+    if args.proposal == "prior":
         dataset = np.load(
             f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/LOADED&COMPRESSED_year_10_with_noise_score_conditional.npz",
             allow_pickle=True,
@@ -155,7 +159,7 @@ elif args.sbi_method == 'nle':
         )["arr_0"]
 
 
-if args.sbi_method == 'npe' and args.proposal == 'ps':
+if args.sbi_method == "npe" and args.proposal == "ps":
     probs = jnp.load(
         f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/data/probs_ps_likelihood.npy"
     )
@@ -201,14 +205,13 @@ print("... build nde")
 
 key = jax.random.PRNGKey(0)
 
-if args.activ_fun == 'silu':
-        activ_fun = jax.nn.silu
-elif args.activ_fun == 'sin':
+if args.activ_fun == "silu":
+    activ_fun = jax.nn.silu
+elif args.activ_fun == "sin":
     activ_fun = jnp.sin
 
-if args.nf == 'smooth':
-
-    if args.sbi_method == 'npe':
+if args.nf == "smooth":
+    if args.sbi_method == "npe":
         omega_c = dist.TruncatedNormal(0.2664, 0.2, low=0).sample(key, (1000,))
         omega_b = dist.Normal(0.0492, 0.006).sample(key, (1000,))
         sigma_8 = dist.Normal(0.831, 0.14).sample(key, (1000,))
@@ -221,7 +224,7 @@ if args.nf == 'smooth':
         scale = jnp.std(theta, axis=0) / 0.07
         shift = jnp.mean(theta / scale, axis=0) - 0.5
 
-    elif args.sbi_method == 'nle':
+    elif args.sbi_method == "nle":
         # how these qantities are comute (with dataset form prior)
         # scale_y = jnp.std(dataset_y, axis=0) / 0.07
         # shift_y = jnp.mean(dataset_y / scale_y, axis=0) - 0.5
@@ -236,13 +239,13 @@ if args.nf == 'smooth':
     bijector_layers = [128] * args.n_bijector_layers
 
     bijector = partial(
-        AffineSigmoidCoupling, layers=bijector_layers, activation=activ_fun, n_components=16
+        AffineSigmoidCoupling,
+        layers=bijector_layers,
+        activation=activ_fun,
+        n_components=16,
     )
 
-    NF = partial(
-        ConditionalRealNVP, n_layers=args.n_flow_layers, bijector_fn=bijector
-    )
-
+    NF = partial(ConditionalRealNVP, n_layers=args.n_flow_layers, bijector_fn=bijector)
 
     class NDE(hk.Module):
         def __call__(self, y):
@@ -251,34 +254,30 @@ if args.nf == 'smooth':
                 nvp, tfb.Chain([tfb.Scale(scale), tfb.Shift(shift)])
             )
 
-elif args.nf == 'affine': 
-
+elif args.nf == "affine":
     bijector_layers = [128] * args.n_bijector_layers
 
-    bijector = partial(
-        AffineCoupling, layers=bijector_layers, activation=activ_fun
-    )
+    bijector = partial(AffineCoupling, layers=bijector_layers, activation=activ_fun)
 
-    NF = partial(
-        ConditionalRealNVP, n_layers=args.n_flow_layers, bijector_fn=bijector
-    )
+    NF = partial(ConditionalRealNVP, n_layers=args.n_flow_layers, bijector_fn=bijector)
+
     class NDE(hk.Module):
         def __call__(self, y):
             return NF(dim)(y)
 
 
-if args.nf == 'affine' and args.sbi_method == 'npe' and args.score_weight > 0:
-    raise ValueError('NDE has to be smooth')
+if args.nf == "affine" and args.sbi_method == "npe" and args.score_weight > 0:
+    raise ValueError("NDE has to be smooth")
 
 
-if args.sbi_method == 'npe':
+if args.sbi_method == "npe":
     nvp_nd = hk.without_apply_rng(
         hk.transform(lambda theta, y: NDE()(y).log_prob(theta).squeeze())
     )
     nvp_sample_nd = hk.transform(
         lambda y: NDE()(y).sample(len(sample_ff), seed=hk.next_rng_key())
     )
-elif args.sbi_method == 'nle':
+elif args.sbi_method == "nle":
     nvp_nd = hk.without_apply_rng(
         hk.transform(lambda theta, y: NDE()(theta).log_prob(y).squeeze())
     )
@@ -333,7 +332,7 @@ params = nvp_nd.init(
 )
 
 # optimizer
-if args.lr_schedule == 'p_c_s':
+if args.lr_schedule == "p_c_s":
     lr_scheduler = optax.piecewise_constant_schedule(
         init_value=0.001,
         boundaries_and_scales={
@@ -344,7 +343,7 @@ if args.lr_schedule == 'p_c_s':
         },
     )
 
-elif args.lr_schedule == 'exp_decay':
+elif args.lr_schedule == "exp_decay":
     lr_scheduler = optax.exponential_decay(
         init_value=0.001,
         transition_steps=args.total_steps // 50,
@@ -404,7 +403,7 @@ plt.savefig(
     f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/results/experiments/exp{PATH}/fig/lr_schedule"
 )
 
-if args.sbi_method == 'npe':
+if args.sbi_method == "npe":
     # save contour plot
     sample_nd = nvp_sample_nd.apply(
         params,
@@ -415,9 +414,10 @@ if args.sbi_method == 'npe':
     idx = jnp.where(jnp.isnan(sample_nd))[0]
     sample_nd = jnp.delete(sample_nd, idx, axis=0)
 
-elif args.sbi_method == 'nle':
-    print("... run mcmc for nle sampling")
+elif args.sbi_method == "nle":
+    print("... run mcmc for posterior sampling")
 
+    @jax.vmap
     def unnormalized_log_prob(theta):
         oc, ob, s8, h0, ns, w0 = theta
 
@@ -437,8 +437,8 @@ elif args.sbi_method == 'nle':
         return likelihood + prior
 
     # Initialize the HMC transition kernel.
-    num_results = int(1e5)
-    num_burnin_steps = int(2e2)
+    num_results = int(3e4)
+    num_burnin_steps = int(5e2)
     adaptive_hmc = tfp.mcmc.SimpleStepSizeAdaptation(
         tfp.mcmc.HamiltonianMonteCarlo(
             target_log_prob_fn=unnormalized_log_prob,
@@ -455,7 +455,7 @@ elif args.sbi_method == 'nle':
         samples, is_accepted = tfp.mcmc.sample_chain(
             num_results=num_results,
             num_burnin_steps=num_burnin_steps,
-            current_state=jnp.array(truth),
+            current_state=jnp.array(truth) * jnp.ones([12, 6]),
             kernel=adaptive_hmc,
             trace_fn=lambda _, pkr: pkr.inner_results.is_accepted,
             seed=jax.random.PRNGKey(0),
@@ -464,11 +464,16 @@ elif args.sbi_method == 'nle':
         return samples, is_accepted
 
     samples_hmc, is_accepted_hmc = run_chain()
-    sample_nd = samples_hmc[is_accepted_hmc].reshape([-1, 6])
+    sample_nd = samples_hmc[is_accepted_hmc]
+    for i in range(6):
+        plt.clf()
+        plt.plot(sample_nd[..., i])
+        plt.savefig(
+            f"{args.path_to_access_ssnpe_desc_project}/ssnpe_desc_project/results/experiments/exp{PATH}/fig/chain_{i}"
+        )
     inds = np.random.randint(0, len(sample_nd), len(sample_ff))
 
     sample_nd = sample_nd[inds, ...]
-
 
 plt.figure()
 c = ChainConsumer()
