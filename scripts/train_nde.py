@@ -208,8 +208,6 @@ print("done ✓")
 ######## CREATE NDE ########
 print("... build nde")
 
-key = jax.random.PRNGKey(0)
-
 if args.activ_fun == "silu":
     activ_fun = jax.nn.silu
 elif args.activ_fun == "sin":
@@ -217,6 +215,9 @@ elif args.activ_fun == "sin":
 
 if args.nf == "smooth":
     if args.sbi_method == "npe":
+
+        key = jax.random.PRNGKey(0)
+
         omega_c = dist.TruncatedNormal(0.2664, 0.2, low=0).sample(key, (1000,))
         omega_b = dist.Normal(0.0492, 0.006).sample(key, (1000,))
         sigma_8 = dist.Normal(0.831, 0.14).sample(key, (1000,))
@@ -423,7 +424,16 @@ if args.sbi_method == "npe":
 elif args.sbi_method == "nle":
     print("... run mcmc for posterior sampling")
 
-    prior_mean = jnp.mean(dataset_theta, axis = 0)
+    key = jax.random.PRNGKey(10)
+    omega_c = dist.TruncatedNormal(0.2664, 0.2, low=0).sample(key, (1000,))
+    omega_b = dist.Normal(0.0492, 0.006).sample(key, (1000,))
+    sigma_8 = dist.Normal(0.831, 0.14).sample(key, (1000,))
+    h_0 = dist.Normal(0.6727, 0.063).sample(key, (1000,))
+    n_s = dist.Normal(0.9645, 0.08).sample(key, (1000,))
+    w_0 = dist.TruncatedNormal(-1.0, 0.9, low=-2.0, high=-0.3).sample(key, (1000,))
+
+    theta = jnp.stack([omega_c, omega_b, sigma_8, h_0, n_s, w_0], axis=-1)
+    prior_mean = jnp.mean(theta, axis = 0)
 
     @jax.vmap
     def unnormalized_log_prob(theta):
