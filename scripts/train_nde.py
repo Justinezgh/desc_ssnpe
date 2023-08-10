@@ -48,13 +48,14 @@ parser.add_argument("--proposal", type=str, default="ps")
 parser.add_argument("--sbi_method", type=str, default="npe")
 parser.add_argument("--lr_schedule", type=str, default="exp_decay")
 parser.add_argument("--nf", type=str, default="smooth")
+parser.add_argument("--bacth_size", type=int, default=256)
 args = parser.parse_args()
 
 ######## PARAMS ########
 print("PARAMS---------------")
 print("---------------------")
 
-batch_size = 256
+batch_size = args.bacth_size
 tmp = list(range(0, 101_000, 5000))
 tmp[0] = 1000
 nb_simulations_allow = tmp[int(args.exp_id[4:])]
@@ -71,6 +72,7 @@ print("lr_schedule:", args.lr_schedule)
 print("proposal:", args.proposal)
 print("sbi method:", args.sbi_method)
 print("nf type:", args.nf)
+print("batch size:", args.bacth_size)
 
 print("---------------------")
 print("---------------------")
@@ -86,7 +88,8 @@ PATH = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
     args.n_bijector_layers,
     args.activ_fun,
     args.lr_schedule,
-    args.nf
+    args.nf,
+    args.bacth_size
 )
 
 os.makedirs(
@@ -524,7 +527,8 @@ field_names = [
     "n_flow_layers",
     "n_bijector_layers",
     "seed",
-    "nf type"
+    "nf type",
+    "batch size"
 ]
 dict = {
     "experiment_id": f"exp{PATH}",
@@ -538,7 +542,8 @@ dict = {
     "n_flow_layers": args.n_flow_layers,
     "n_bijector_layers": args.n_bijector_layers,
     "seed": args.seed,
-    "nf type": args.nf
+    "nf type": args.nf,
+    "batch size": args.bacth_size
 }
 
 with open(
