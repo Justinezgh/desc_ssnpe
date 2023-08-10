@@ -336,22 +336,23 @@ params = nf_log_prob.init(
     jax.random.PRNGKey(args.seed), 0.5 * jnp.ones([1, dim]), 0.5 * jnp.ones([1, dim])
 )
 
+nb_steps = args.total_steps - args.total_steps * 0.2
 # optimizer
 if args.lr_schedule == "p_c_s":
     lr_scheduler = optax.piecewise_constant_schedule(
         init_value=0.001,
         boundaries_and_scales={
-            int(args.total_steps * 0.4): 0.2,
-            int(args.total_steps * 0.6): 0.3,
-            int(args.total_steps * 0.8): 0.4,
-            int(args.total_steps * 1): 0.5,
+            int(nb_steps * 0.4): 0.2,
+            int(nb_steps * 0.6): 0.3,
+            int(nb_steps * 0.8): 0.4,
+            int(nb_steps * 1): 0.5,
         },
     )
 
 elif args.lr_schedule == "exp_decay":
     lr_scheduler = optax.exponential_decay(
         init_value=0.001,
-        transition_steps=args.total_steps // 50,
+        transition_steps=nb_steps // 50,
         decay_rate=0.9,
         end_value=1e-5,
     )
@@ -422,6 +423,8 @@ if args.sbi_method == "npe":
 elif args.sbi_method == "nle":
     print("... run mcmc for posterior sampling")
 
+    prior_mean = jnp.mean(dataset_theta, axis = 0)
+
     @jax.vmap
     def unnormalized_log_prob(theta):
         oc, ob, s8, h0, ns, w0 = theta
@@ -460,7 +463,7 @@ elif args.sbi_method == "nle":
         samples, is_accepted = tfp.mcmc.sample_chain(
             num_results=num_results,
             num_burnin_steps=num_burnin_steps,
-            current_state=jnp.array(truth) * jnp.ones([12, 6]),
+            current_state=jnp.array(prior_mean) * jnp.ones([12, 6]),
             kernel=adaptive_hmc,
             trace_fn=lambda _, pkr: pkr.inner_results.is_accepted,
             seed=jax.random.PRNGKey(0),
